@@ -8,6 +8,7 @@ Requirements
 
 pip packages:
 - python_arptable
+- jmespath
 
 Role Variables
 --------------
