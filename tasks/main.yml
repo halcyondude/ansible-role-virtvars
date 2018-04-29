@@ -1,63 +1,125 @@
 ---
-
-- name: (if test) use mocked VM list data for local devtest
-  set_fact: node_list={{ mocked_node_list }}
-
-- name: Display the list of VM's (node_list)
-  debug: msg="(node_list) The node value is {{item}}"
-  with_items: "{{node_list}}"
+- name: Inform if running with mocked data
+  debug:
+    msg: "RUNNING WITH MOCKED DATA (LOCAL TEST OR CI)"
+  when: virtvars_mock_data|default("false")|bool
 
 - name: Display the list of VM (domain) names
-  debug: var=node_list
+  debug: 
+    var: virtvars_node_list
 
-- name: get XML definitions for libvirt domains (iterate over node_list)
+- name: get XML definitions for libvirt domains
   virt:
     name: "{{ item }}"
     command: get_xml
-  register: node_list_xml
-  with_items: "{{ node_list }}"
+  with_items: "{{ virtvars_node_list }}"
+  register: domain_xml_node_list
+  when: not virtvars_mock_data|default("false")|bool
 
-- name: simplify node_list_xml into list of dict(domain_name, domain_xml)
-  debug: msg={{ node_list_xml | json_query(xml_reducer_query) }} verbosity=2
+- name: (if mocking) inject mocked libvirt XML data
+  include_vars:
+    file: "../tests/mock-domain-xml.yml"
+    name: mock_data
+  when: virtvars_mock_data|default("false")|bool
 
-- name: Transform 'node_list_xml' --> simplified_xml_maps (list of dict(domain_name, domain_xml))
-  set_fact: simplified_xml_maps={{ node_list_xml | json_query(xml_reducer_query) }}
+- name: dump mocked data
+  debug:
+    var: mock_data
+    verbosity: 2
+  when: virtvars_mock_data|default("false")|bool
 
-- name: show simplified_xml_maps (if -vv enabled)
-  debug: var=simplified_xml_maps verbosity=2
+- name: (if mocking) set mocked data to fact
+  set_fact:
+    domain_xml_node_list: "{{ mock_data }}"
+  when: virtvars_mock_data|default("false")|bool
 
-### SET FACTS: {vmname}_domain_xml ###
-- name: set (dynamically generated) fact KVP's to access domain XML by VM name
-  set_fact: '{{ item.domain_name }}_domain_xml={{ item.domain_xml }}'
-  with_items: "{{ simplified_xml_maps }}"
+- name: Display domain_xml_node_list
+  debug:
+    var: domain_xml_node_list
 
+- name: Display XML strings
+  debug:
+    var: item.get_xml
+    verbosity: 2
+  with_items:
+    - "{{ domain_xml_node_list.results }}"
+    
 - name: extract MAC address(es) from domain XML(s)
   xml:
-      xmlstring: "{{ item.domain_xml }}"
+      xmlstring: "{{ item.get_xml }}"
       xpath: /domain/devices/interface/mac
       content: attribute
       attribute: address
-  register: mac_address_results
-  with_items: "{{ simplified_xml_maps }}"
+  with_items:
+    - "{{ domain_xml_node_list.results }}"
+  register: macs
 
-- name: show mac_address_results (if -vv enabled)
-  debug: var=mac_address_results verbosity=2
+- name: Display result of querying domain XML for MAC addresses
+  debug: 
+    msg: "domain {{ item.item.item }} mac {{ item.matches.0.mac.address }}"
+    verbosity: 2
+  with_items: "{{ macs.results }}"
+  
+# "virtvars_domain_list": [
+#     {
+#         "domain": "tiny0", 
+#         "mac": "52:54:00:ee:d3:61"
+#     }, 
+#     {
+#         "domain": "tiny2", 
+#         "mac": "52:54:00:2a:e5:c1"
+#     }
+# ]
+- name: Generate a list of dictionaries for domain mac info
+  set_fact:
+    virtvars_domain_list: "{{ virtvars_domain_list|default([]) + [ {'domain': item.item.item, 'mac': item.matches.0.mac.address} ] }}"
+  with_items: "{{ macs.results }}"
 
-- name: Transform 'mac_address_results' --> simplified_mac_results (list of dict(domain_name, mac address))
-  set_fact: simplified_mac_results={{ mac_address_results | json_query(mac_reducer_query) }}
+- name: Display virtvars_domain_list
+  debug:
+    var: virtvars_domain_list
+    verbosity: 2
 
-- name: show simplified_mac_results (if -vv enabled)
-  debug: var=simplified_mac_results verbosity=2
+# "virtvars_mac_dict": {
+#     "tiny0": "52:54:00:ee:d3:61", 
+#     "tiny2": "52:54:00:2a:e5:c1"
+# }
+- name: Generate virtvars_mac_dict (domain, mac)
+  set_fact:
+    virtvars_mac_dict: "{{ virtvars_mac_dict | default({}) | combine({item.item.item: item.matches.0.mac.address}) }}"
+  with_items: "{{ macs.results }}"
 
-### SET FACTS: {vmname}_mac ###
-- name: set (dynamically generated) fact KVP's to access MAC addresses by VM names
-  set_fact: '{{ item.domain_name }}_mac={{ item.hwaddr.0.mac.address }}'
-  with_items: "{{ simplified_mac_results }}"
+- name: Display virtvars_mac_dict
+  debug:
+    var: virtvars_mac_dict 
+    verbosity: 2
 
-# - name: Display summary MAC address variables generated
-#   debug: msg="{{ item }}, {{item}}
-#   with_items: "{{ node_list }}"
+# TODO: mock this too
+- when: not virtvars_mock_data|default("false")|bool
+  block:
 
-- name: Look up IP addresses in arp table
-  debug: msg="TODO lookup IP from MAC using arp module for {{ item }}"
-  with_items: "{{ node_list }}"
+    - name: Find IPs from macs
+      arptable_ip_from_mac:
+        mac_address: "{{ item.value }}"
+      with_dict: "{{ virtvars_mac_dict }}"
+      register: ips_from_macs
+
+    - name: Display ips_from_macs
+      debug:
+        var: ips_from_macs
+        verbosity: 2
+
+    # "virtvars_ip_dict": {
+    #     "tiny0": "192.168.122.249", 
+    #     "tiny2": "192.168.122.44"
+    # }
+    - name: Generate virtvars_ip_dict (domain, ip)
+      set_fact:
+        virtvars_ip_dict: "{{ virtvars_ip_dict | default({}) | combine({item.item.key: item.ip_address}) }}"
+      with_items: "{{ ips_from_macs.results }}"
+
+    - name: Display virtvars_ip_dict (domain, ip)
+      debug:
+        var: virtvars_ip_dict
+
+

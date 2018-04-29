@@ -1,12 +1,15 @@
 ---
 - hosts: localhost
-  remote_user: root
+  gather_facts: no
+  connection: local
 
+ # note: this assumes these domains are created!
   vars:
-    virtvars_mock_data: true
     virtvars_node_list:
       - tiny0
       - tiny2
-    
+
   roles:
   - ansible-role-virtvars
+
+
