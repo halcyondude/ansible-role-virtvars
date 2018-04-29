@@ -1,0 +1,5 @@
+{
+    "ANSIBLE_MODULE_ARGS": {
+        "mac_address": "00:50:56:f4:4a:c6"
+    }
+}
