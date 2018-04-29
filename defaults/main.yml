@@ -1,2 +1,11 @@
 ---
-# defaults file for ansible-role-virtvars
+# transform results from calling the virt module (with_items) into list of dict(vmname, xml)
+xml_reducer_query: "results[*].{domain_name: item, domain_xml: get_xml}"
+
+# transform results from the xml module (with items) into a list of dict (vmname, mac)
+mac_reducer_query: "results[*].{domain_name: item.domain_name, hwaddr: matches}"
+
+# when running locally (and these cirros domains are created)
+mocked_node_list:
+- tiny0
+- tiny2

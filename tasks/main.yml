@@ -1,2 +1,63 @@
 ---
-# tasks file for ansible-role-virtvars
+
+- name: (if test) use mocked VM list data for local devtest
+  set_fact: node_list={{ mocked_node_list }}
+
+- name: Display the list of VM's (node_list)
+  debug: msg="(node_list) The node value is {{item}}"
+  with_items: "{{node_list}}"
+
+- name: Display the list of VM (domain) names
+  debug: var=node_list
+
+- name: get XML definitions for libvirt domains (iterate over node_list)
+  virt:
+    name: "{{ item }}"
+    command: get_xml
+  register: node_list_xml
+  with_items: "{{ node_list }}"
+
+- name: simplify node_list_xml into list of dict(domain_name, domain_xml)
+  debug: msg={{ node_list_xml | json_query(xml_reducer_query) }} verbosity=2
+
+- name: Transform 'node_list_xml' --> simplified_xml_maps (list of dict(domain_name, domain_xml))
+  set_fact: simplified_xml_maps={{ node_list_xml | json_query(xml_reducer_query) }}
+
+- name: show simplified_xml_maps (if -vv enabled)
+  debug: var=simplified_xml_maps verbosity=2
+
+### SET FACTS: {vmname}_domain_xml ###
+- name: set (dynamically generated) fact KVP's to access domain XML by VM name
+  set_fact: '{{ item.domain_name }}_domain_xml={{ item.domain_xml }}'
+  with_items: "{{ simplified_xml_maps }}"
+
+- name: extract MAC address(es) from domain XML(s)
+  xml:
+      xmlstring: "{{ item.domain_xml }}"
+      xpath: /domain/devices/interface/mac
+      content: attribute
+      attribute: address
+  register: mac_address_results
+  with_items: "{{ simplified_xml_maps }}"
+
+- name: show mac_address_results (if -vv enabled)
+  debug: var=mac_address_results verbosity=2
+
+- name: Transform 'mac_address_results' --> simplified_mac_results (list of dict(domain_name, mac address))
+  set_fact: simplified_mac_results={{ mac_address_results | json_query(mac_reducer_query) }}
+
+- name: show simplified_mac_results (if -vv enabled)
+  debug: var=simplified_mac_results verbosity=2
+
+### SET FACTS: {vmname}_mac ###
+- name: set (dynamically generated) fact KVP's to access MAC addresses by VM names
+  set_fact: '{{ item.domain_name }}_mac={{ item.hwaddr.0.mac.address }}'
+  with_items: "{{ simplified_mac_results }}"
+
+# - name: Display summary MAC address variables generated
+#   debug: msg="{{ item }}, {{item}}
+#   with_items: "{{ node_list }}"
+
+- name: Look up IP addresses in arp table
+  debug: msg="TODO lookup IP from MAC using arp module for {{ item }}"
+  with_items: "{{ node_list }}"
