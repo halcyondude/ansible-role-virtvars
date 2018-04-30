@@ -10,7 +10,7 @@ The role presently supports one specific scenario:
 
 - Given a list of domain names, find MAC addresses using [Ansible's virt module](http://docs.ansible.com/ansible/latest/modules/virt_module.html).
 - Query the virthost's ARP table with [python_arptable](http://python-arptable.readthedocs.io) to find domain IP addresses.
-- Set facts/variables (with dynamically generated fact names) that can be used in subsequent roles/tasks.
+- Set facts/variables that can be used in subsequent roles/tasks (eg get IP for domain)
 
 This is useful for the [tripleo-quickstart](https://github.com/openstack/tripleo-quickstart) project, an Ansible based project for setting up [TripleO](http://tripleo.org) environments in openstack CI.
 
