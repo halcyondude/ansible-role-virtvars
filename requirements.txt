@@ -1,8 +1,8 @@
 # note: https://github.com/openstack/tripleo-quickstart/blob/master/requirements.txt
 ansible==2.4.1
 
-# used to simplify ansible results
-jmespath
+# needed for xml plugin used to parse domain xml
+lxml
 
 # used by library/arptable_ip_from_mac.py
 python_arptable

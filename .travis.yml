@@ -1,6 +1,8 @@
 ---
 language: python
 python: "2.7"
+virtualenv:
+  system_site_packages: true
 
 # Use the new container infrastructure
 sudo: false
@@ -10,10 +12,13 @@ addons:
   apt:
     packages:
     - python-pip
+    - python-lxml
 
 install:
   # Install ansible
-  - pip install ansible
+  #- pip install ansible lxml
+
+  - pip install -r requirements.txt
 
   # Check ansible version
   - ansible --version
@@ -26,7 +31,7 @@ script:
   - ansible-playbook tests/test.yml -i tests/inventory --syntax-check
 
   # run with no input vars, basic invocation (should do nothing and pass
-  - ansible-playbook -i tests/inventory tests/test.yml --connection=local -vv
+  - ansible-playbook -i tests/inventory tests/test.yml --connection=local -vvvv
 
   # Run the role/playbook again, checking to make sure it's idempotent.
   - >
