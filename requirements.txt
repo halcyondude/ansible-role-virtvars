@@ -1,5 +1,5 @@
 # note: https://github.com/openstack/tripleo-quickstart/blob/master/requirements.txt
-ansible==2.4.1
+ansible==4.2.0
 
 # needed for xml plugin used to parse domain xml
 lxml
